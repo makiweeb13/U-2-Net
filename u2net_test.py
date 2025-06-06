@@ -13,13 +13,13 @@ import numpy as np
 from PIL import Image
 import glob
 
-from data_loader import RescaleT
-from data_loader import ToTensor
-from data_loader import ToTensorLab
-from data_loader import SalObjDataset
+from .data_loader import RescaleT
+from .data_loader import ToTensor
+from .data_loader import ToTensorLab
+from .data_loader import SalObjDataset
 
-from model import U2NET # full size version 173.6 MB
-from model import U2NETP # small version u2net 4.7 MB
+from .model import U2NET # full size version 173.6 MB
+from .model import U2NETP # small version u2net 4.7 MB
 
 # normalize the predicted SOD probability map
 def normPRED(d):
@@ -51,16 +51,59 @@ def save_output(image_name,pred,d_dir):
 
     imo.save(d_dir+imidx+'.png')
 
+
+def segment_with_u2net(image_dir, prediction_dir, model_dir, model_name='u2netp'):
+    # Load the model
+    if model_name == 'u2net':
+        model = U2NET(3, 1)
+    else:
+        model = U2NETP(3, 1)
+
+    model.load_state_dict(torch.load(model_dir, map_location=torch.device('cpu')))
+    model.eval()
+
+    # Create a dataset and dataloader
+    dataset = SalObjDataset(img_name_list=glob.glob(image_dir + os.sep + '*'),
+                             lbl_name_list=[],
+                             transform=transforms.Compose([RescaleT(320),
+                                                           ToTensorLab(flag=0)])
+                             )
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=1)
+
+    # Inference
+    for i, data in enumerate(dataloader):
+        inputs = data['image']
+        inputs = inputs.type(torch.FloatTensor)
+
+        if torch.cuda.is_available():
+            inputs = Variable(inputs.cuda())
+        else:
+            inputs = Variable(inputs)
+
+        d1, d2, d3, d4, d5, d6, d7 = model(inputs)
+
+        # normalization
+        pred = d1[:, 0, :, :]
+        pred = normPRED(pred)
+
+        # save results
+        if not os.path.exists(prediction_dir):
+            os.makedirs(prediction_dir, exist_ok=True)
+        save_output(dataset.img_name_list[i], pred, prediction_dir)
+
+        del d1, d2, d3, d4, d5, d6, d7
+
+
 def main():
 
     # --------- 1. get image path and name ---------
-    model_name='u2net'#u2netp
+    model_name='u2netp'#u2netp
 
 
 
     image_dir = os.path.join(os.getcwd(), 'test_data', 'test_images')
     prediction_dir = os.path.join(os.getcwd(), 'test_data', model_name + '_results' + os.sep)
-    model_dir = os.path.join(os.getcwd(), 'saved_models', model_name, model_name + '.pth')
+    model_dir = os.path.join(os.getcwd(), 'u2net', 'saved_models', model_name, model_name + '.pth')
 
     img_name_list = glob.glob(image_dir + os.sep + '*')
     print(img_name_list)
@@ -118,5 +161,7 @@ def main():
 
         del d1,d2,d3,d4,d5,d6,d7
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
+
+__all__ = ["segment_with_u2net"]
