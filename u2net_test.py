@@ -89,7 +89,7 @@ def segment_with_u2net(image_dir, prediction_dir, model_dir, model_name='u2netp'
         # save results
         if not os.path.exists(prediction_dir):
             os.makedirs(prediction_dir, exist_ok=True)
-        save_output(dataset.img_name_list[i], pred, prediction_dir)
+        save_output(dataset.image_name_list[i], pred, prediction_dir)
 
         del d1, d2, d3, d4, d5, d6, d7
 
